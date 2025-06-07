@@ -37,6 +37,8 @@
         @media print {
             .no-print { display: none !important; }
             .invoice-preview { box-shadow: none; margin: 0; }
+            .sm\\:hidden { display: none !important; }
+            .hidden { display: block !important; }
         }
     </style>
 </head>
@@ -362,27 +364,53 @@
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto mb-8">
-                        <table class="w-full border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50">
-                                    <th class="border border-gray-200 px-4 py-3 text-left font-semibold">Description</th>
-                                    <th class="border border-gray-200 px-4 py-3 text-center font-semibold w-20">Qty</th>
-                                    <th class="border border-gray-200 px-4 py-3 text-right font-semibold w-32">Unit Price</th>
-                                    <th class="border border-gray-200 px-4 py-3 text-right font-semibold w-32">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.items.map(item => `
-                                    <tr>
-                                        <td class="border border-gray-200 px-4 py-3">${item.description}</td>
-                                        <td class="border border-gray-200 px-4 py-3 text-center">${item.quantity}</td>
-                                        <td class="border border-gray-200 px-4 py-3 text-right">${this.formatCurrency(item.price)}</td>
-                                        <td class="border border-gray-200 px-4 py-3 text-right font-medium">${this.formatCurrency(item.total)}</td>
+                    <div class="mb-8">
+                        <!-- Desktop Table -->
+                        <div class="hidden sm:block overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="border border-gray-200 px-4 py-3 text-left font-semibold">Description</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center font-semibold w-20">Qty</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-right font-semibold w-32">Unit Price</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-right font-semibold w-32">Total</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    ${data.items.map(item => `
+                                        <tr>
+                                            <td class="border border-gray-200 px-4 py-3">${item.description}</td>
+                                            <td class="border border-gray-200 px-4 py-3 text-center">${item.quantity}</td>
+                                            <td class="border border-gray-200 px-4 py-3 text-right">${this.formatCurrency(item.price)}</td>
+                                            <td class="border border-gray-200 px-4 py-3 text-right font-medium">${this.formatCurrency(item.total)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Mobile Card Layout -->
+                        <div class="sm:hidden space-y-4">
+                            ${data.items.map((item, index) => `
+                                <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                    <div class="font-medium text-gray-800 mb-2">${item.description}</div>
+                                    <div class="grid grid-cols-3 gap-4 text-sm">
+                                        <div>
+                                            <span class="text-gray-600 block">Quantity</span>
+                                            <span class="font-medium">${item.quantity}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-600 block">Unit Price</span>
+                                            <span class="font-medium">${this.formatCurrency(item.price)}</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-600 block">Total</span>
+                                            <span class="font-bold text-blue-600">${this.formatCurrency(item.total)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
 
                     <div class="flex justify-end">
