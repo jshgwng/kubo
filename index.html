@@ -420,9 +420,9 @@
                 const element = document.getElementById('invoicePreview');
                 
                 try {
-                    // Better mobile-friendly canvas options
+                    // Fixed scale for consistent PDF size across all devices
                     const canvas = await html2canvas(element, {
-                        scale: window.devicePixelRatio || 1,
+                        scale: 2, // Fixed scale for consistency
                         useCORS: true,
                         allowTaint: true,
                         width: element.scrollWidth,
@@ -431,47 +431,58 @@
                         scrollY: 0
                     });
                     
-                    const imgData = canvas.toDataURL('image/png', 0.8);
+                    const imgData = canvas.toDataURL('image/png', 0.9);
                     const pdf = new jsPDF('p', 'mm', 'a4');
                     
                     const pdfWidth = pdf.internal.pageSize.getWidth();
                     const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    
-                    // Calculate dimensions to fit properly with margins
                     const margin = 10;
                     const availableWidth = pdfWidth - (margin * 2);
                     const availableHeight = pdfHeight - (margin * 2);
                     
-                    const widthRatio = availableWidth / (imgWidth / window.devicePixelRatio);
-                    const heightRatio = availableHeight / (imgHeight / window.devicePixelRatio);
-                    const ratio = Math.min(widthRatio, heightRatio);
+                    // Fixed conversion ratio for consistent sizing
+                    const pixelsPerMM = 3.78; // Standard conversion
+                    const imgWidthMM = canvas.width / pixelsPerMM;
+                    const imgHeightMM = canvas.height / pixelsPerMM;
                     
-                    const finalWidth = (imgWidth / window.devicePixelRatio) * ratio;
-                    const finalHeight = (imgHeight / window.devicePixelRatio) * ratio;
+                    // Calculate scale to fit within available space
+                    const scaleX = availableWidth / imgWidthMM;
+                    const scaleY = availableHeight / imgHeightMM;
+                    const scale = Math.min(scaleX, scaleY, 1); // Don't upscale
+                    
+                    const finalWidth = imgWidthMM * scale;
+                    const finalHeight = imgHeightMM * scale;
                     
                     const imgX = (pdfWidth - finalWidth) / 2;
                     const imgY = margin;
                     
-                    // Add multiple pages if content is too long
+                    // Handle multi-page documents
                     if (finalHeight > availableHeight) {
-                        const pageHeight = availableHeight;
+                        const pageHeightMM = availableHeight;
+                        const pageHeightPx = pageHeightMM * pixelsPerMM;
                         let yPosition = 0;
+                        let pageNumber = 0;
                         
-                        while (yPosition < imgHeight) {
+                        while (yPosition < canvas.height) {
+                            if (pageNumber > 0) pdf.addPage();
+                            
+                            const remainingHeight = canvas.height - yPosition;
+                            const currentPageHeight = Math.min(remainingHeight, pageHeightPx);
+                            
+                            // Create canvas for this page
                             const pageCanvas = document.createElement('canvas');
                             const pageCtx = pageCanvas.getContext('2d');
-                            pageCanvas.width = imgWidth;
-                            pageCanvas.height = Math.min(imgHeight - yPosition, pageHeight * window.devicePixelRatio);
+                            pageCanvas.width = canvas.width;
+                            pageCanvas.height = currentPageHeight;
                             
                             pageCtx.drawImage(canvas, 0, -yPosition);
-                            const pageImgData = pageCanvas.toDataURL('image/png', 0.8);
+                            const pageImgData = pageCanvas.toDataURL('image/png', 0.9);
                             
-                            if (yPosition > 0) pdf.addPage();
-                            pdf.addImage(pageImgData, 'PNG', imgX, imgY, finalWidth, pageCanvas.height / window.devicePixelRatio * ratio);
+                            const pageHeightMM = currentPageHeight / pixelsPerMM * scale;
+                            pdf.addImage(pageImgData, 'PNG', imgX, imgY, finalWidth, pageHeightMM);
                             
-                            yPosition += pageHeight * window.devicePixelRatio;
+                            yPosition += pageHeightPx;
+                            pageNumber++;
                         }
                     } else {
                         pdf.addImage(imgData, 'PNG', imgX, imgY, finalWidth, finalHeight);
@@ -550,32 +561,36 @@
                 const element = document.getElementById('invoicePreview');
                 
                 try {
+                    // Fixed scale for consistent PDF size across all devices
                     const canvas = await html2canvas(element, {
-                        scale: window.devicePixelRatio || 1,
+                        scale: 2, // Fixed scale for consistency
                         useCORS: true,
                         allowTaint: true,
                         width: element.scrollWidth,
                         height: element.scrollHeight
                     });
                     
-                    const imgData = canvas.toDataURL('image/png', 0.8);
+                    const imgData = canvas.toDataURL('image/png', 0.9);
                     const pdf = new jsPDF('p', 'mm', 'a4');
                     
                     const pdfWidth = pdf.internal.pageSize.getWidth();
                     const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    
                     const margin = 10;
                     const availableWidth = pdfWidth - (margin * 2);
                     const availableHeight = pdfHeight - (margin * 2);
                     
-                    const widthRatio = availableWidth / (imgWidth / window.devicePixelRatio);
-                    const heightRatio = availableHeight / (imgHeight / window.devicePixelRatio);
-                    const ratio = Math.min(widthRatio, heightRatio);
+                    // Fixed conversion ratio for consistent sizing
+                    const pixelsPerMM = 3.78; // Standard conversion
+                    const imgWidthMM = canvas.width / pixelsPerMM;
+                    const imgHeightMM = canvas.height / pixelsPerMM;
                     
-                    const finalWidth = (imgWidth / window.devicePixelRatio) * ratio;
-                    const finalHeight = (imgHeight / window.devicePixelRatio) * ratio;
+                    // Calculate scale to fit within available space
+                    const scaleX = availableWidth / imgWidthMM;
+                    const scaleY = availableHeight / imgHeightMM;
+                    const scale = Math.min(scaleX, scaleY, 1); // Don't upscale
+                    
+                    const finalWidth = imgWidthMM * scale;
+                    const finalHeight = imgHeightMM * scale;
                     
                     const imgX = (pdfWidth - finalWidth) / 2;
                     const imgY = margin;
