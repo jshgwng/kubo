@@ -158,15 +158,15 @@
                     <h2 class="text-xl font-semibold text-gray-800">Preview</h2>
                     <div class="flex space-x-2 no-print">
                         <button id="downloadPdf" 
-                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium">
-                            📄 Download PDF
+                                class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-xs sm:text-sm font-medium">
+                            📄 PDF
                         </button>
                         <button id="shareWhatsApp" 
-                                class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium">
+                                class="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-xs sm:text-sm font-medium">
                             📱 WhatsApp
                         </button>
                         <button id="shareEmail" 
-                                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                                class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs sm:text-sm font-medium">
                             ✉️ Email
                         </button>
                     </div>
@@ -185,6 +185,8 @@
             constructor() {
                 this.documentType = 'invoice';
                 this.items = [];
+                this.pdfBlob = null;
+                this.pdfFileName = null;
                 this.initializeEventListeners();
                 this.setCurrentDate();
                 this.addInitialItem();
@@ -418,47 +420,178 @@
                 const element = document.getElementById('invoicePreview');
                 
                 try {
+                    // Better mobile-friendly canvas options
                     const canvas = await html2canvas(element, {
-                        scale: 2,
+                        scale: window.devicePixelRatio || 1,
                         useCORS: true,
-                        allowTaint: true
+                        allowTaint: true,
+                        width: element.scrollWidth,
+                        height: element.scrollHeight,
+                        scrollX: 0,
+                        scrollY: 0
                     });
                     
-                    const imgData = canvas.toDataURL('image/png');
+                    const imgData = canvas.toDataURL('image/png', 0.8);
                     const pdf = new jsPDF('p', 'mm', 'a4');
                     
                     const pdfWidth = pdf.internal.pageSize.getWidth();
                     const pdfHeight = pdf.internal.pageSize.getHeight();
                     const imgWidth = canvas.width;
                     const imgHeight = canvas.height;
-                    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-                    const imgX = (pdfWidth - imgWidth * ratio) / 2;
-                    const imgY = 10;
                     
-                    pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+                    // Calculate dimensions to fit properly with margins
+                    const margin = 10;
+                    const availableWidth = pdfWidth - (margin * 2);
+                    const availableHeight = pdfHeight - (margin * 2);
+                    
+                    const widthRatio = availableWidth / (imgWidth / window.devicePixelRatio);
+                    const heightRatio = availableHeight / (imgHeight / window.devicePixelRatio);
+                    const ratio = Math.min(widthRatio, heightRatio);
+                    
+                    const finalWidth = (imgWidth / window.devicePixelRatio) * ratio;
+                    const finalHeight = (imgHeight / window.devicePixelRatio) * ratio;
+                    
+                    const imgX = (pdfWidth - finalWidth) / 2;
+                    const imgY = margin;
+                    
+                    // Add multiple pages if content is too long
+                    if (finalHeight > availableHeight) {
+                        const pageHeight = availableHeight;
+                        let yPosition = 0;
+                        
+                        while (yPosition < imgHeight) {
+                            const pageCanvas = document.createElement('canvas');
+                            const pageCtx = pageCanvas.getContext('2d');
+                            pageCanvas.width = imgWidth;
+                            pageCanvas.height = Math.min(imgHeight - yPosition, pageHeight * window.devicePixelRatio);
+                            
+                            pageCtx.drawImage(canvas, 0, -yPosition);
+                            const pageImgData = pageCanvas.toDataURL('image/png', 0.8);
+                            
+                            if (yPosition > 0) pdf.addPage();
+                            pdf.addImage(pageImgData, 'PNG', imgX, imgY, finalWidth, pageCanvas.height / window.devicePixelRatio * ratio);
+                            
+                            yPosition += pageHeight * window.devicePixelRatio;
+                        }
+                    } else {
+                        pdf.addImage(imgData, 'PNG', imgX, imgY, finalWidth, finalHeight);
+                    }
                     
                     const docType = this.documentType;
                     const docNumber = document.getElementById('documentNumber').value || 'document';
-                    pdf.save(`${docType}-${docNumber}.pdf`);
+                    const fileName = `${docType}-${docNumber}.pdf`;
+                    
+                    // Store PDF data for sharing
+                    this.pdfBlob = pdf.output('blob');
+                    this.pdfFileName = fileName;
+                    
+                    pdf.save(fileName);
                 } catch (error) {
                     console.error('PDF generation failed:', error);
                     alert('Failed to generate PDF. Please try again.');
                 }
             }
 
-            shareWhatsApp() {
+            async shareWhatsApp() {
                 const data = this.collectFormData();
                 const { total } = this.calculateTotals(data.items, data.includeTax);
                 const docType = this.documentType.charAt(0).toUpperCase() + this.documentType.slice(1);
                 
-                const message = `${docType} from ${data.businessName}%0A%0A` +
+                // First try to generate PDF for sharing
+                if (!this.pdfBlob) {
+                    await this.generatePDFForSharing();
+                }
+                
+                // Check if Web Share API is supported and can share files
+                if (navigator.share && navigator.canShare && this.pdfBlob) {
+                    try {
+                        const file = new File([this.pdfBlob], this.pdfFileName || `${docType}.pdf`, {
+                            type: 'application/pdf'
+                        });
+                        
+                        if (navigator.canShare({ files: [file] })) {
+                            await navigator.share({
+                                title: `${docType} from ${data.businessName}`,
+                                text: `${docType} #${data.documentNumber} - Total: ${this.formatCurrency(total)}`,
+                                files: [file]
+                            });
+                            return;
+                        }
+                    } catch (error) {
+                        console.log('Web Share API failed, falling back to text message');
+                    }
+                }
+                
+                // Fallback to text message with offer to download PDF
+                const message = `*${docType} from ${data.businessName}*%0A%0A` +
                     `${docType} #: ${data.documentNumber}%0A` +
                     `Client: ${data.clientName}%0A` +
-                    `Total: ${this.formatCurrency(total)}%0A%0A` +
-                    `Generated with KuboCash 💰`;
+                    `Date: ${new Date(data.documentDate).toLocaleDateString()}%0A` +
+                    `Total: *${this.formatCurrency(total)}*%0A%0A` +
+                    `📋 Items:%0A` +
+                    data.items.map(item => 
+                        `• ${item.description} (${item.quantity}x) - ${this.formatCurrency(item.total)}`
+                    ).join('%0A') + 
+                    `%0A%0A💰 _Generated with KuboCash_`;
                 
                 const whatsappUrl = `https://wa.me/?text=${message}`;
                 window.open(whatsappUrl, '_blank');
+                
+                // Show instruction for PDF sharing
+                if (this.pdfBlob) {
+                    setTimeout(() => {
+                        alert('💡 Tip: After sending the message, you can manually attach the downloaded PDF file to your WhatsApp chat for a complete professional invoice.');
+                    }, 1000);
+                }
+            }
+
+            async generatePDFForSharing() {
+                const { jsPDF } = window.jspdf;
+                const element = document.getElementById('invoicePreview');
+                
+                try {
+                    const canvas = await html2canvas(element, {
+                        scale: window.devicePixelRatio || 1,
+                        useCORS: true,
+                        allowTaint: true,
+                        width: element.scrollWidth,
+                        height: element.scrollHeight
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/png', 0.8);
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    
+                    const margin = 10;
+                    const availableWidth = pdfWidth - (margin * 2);
+                    const availableHeight = pdfHeight - (margin * 2);
+                    
+                    const widthRatio = availableWidth / (imgWidth / window.devicePixelRatio);
+                    const heightRatio = availableHeight / (imgHeight / window.devicePixelRatio);
+                    const ratio = Math.min(widthRatio, heightRatio);
+                    
+                    const finalWidth = (imgWidth / window.devicePixelRatio) * ratio;
+                    const finalHeight = (imgHeight / window.devicePixelRatio) * ratio;
+                    
+                    const imgX = (pdfWidth - finalWidth) / 2;
+                    const imgY = margin;
+                    
+                    pdf.addImage(imgData, 'PNG', imgX, imgY, finalWidth, finalHeight);
+                    
+                    const docType = this.documentType;
+                    const docNumber = document.getElementById('documentNumber').value || 'document';
+                    const fileName = `${docType}-${docNumber}.pdf`;
+                    
+                    this.pdfBlob = pdf.output('blob');
+                    this.pdfFileName = fileName;
+                    
+                } catch (error) {
+                    console.error('PDF generation for sharing failed:', error);
+                }
             }
 
             shareEmail() {
